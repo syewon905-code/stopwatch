@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>스탑워치</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  :root {
+    --text: #eef1fb;
+    --muted: #9aa4c4;
+    --accent: #8ee6b0;
+    --danger: #ff9a9a;
+    --line: rgba(255,255,255,.08);
+    --moon: #f6f1d5;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text);
+    font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    padding: 24px;
+    overflow-x: hidden;
+    background:
+      radial-gradient(ellipse at 50% 120%, #2a2f6b 0%, transparent 60%),
+      radial-gradient(ellipse at 15% 10%, rgba(88,60,150,.35) 0%, transparent 50%),
+      linear-gradient(180deg, #050816 0%, #0b1236 45%, #18205a 80%, #23296b 100%);
+    background-attachment: fixed;
+  }
+
+  /* 별 캔버스 */
+  #sky {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .wrap {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 380px;
+    background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03));
+    border: 1px solid rgba(255,255,255,.1);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    border-radius: 32px;
+    padding: 36px 28px 24px;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.08),
+      0 30px 80px rgba(3,6,24,.55);
+    opacity: 0;
+    transform: scale(.94) translateY(16px);
+    filter: blur(6px);
+    pointer-events: none;
+    transition: opacity .9s ease, transform 1s cubic-bezier(.2,.8,.2,1), filter .9s ease;
+  }
+  body.ready .wrap {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    pointer-events: auto;
+  }
+
+  /* ===== 인트로: 밤의 오피스 ===== */
+  #intro {
+    position: fixed;
+    inset: 0;
+    z-index: 5;
+    overflow: hidden;
+    transition: opacity .7s ease;
+  }
+  #intro.fade { opacity: 0; pointer-events: none; }
+  #scene {
+    width: 100%;
+    height: 100%;
+    display: block;
+    will-change: transform;
+    transition: transform 2.6s cubic-bezier(.7,0,.3,1);
+  }
+  #skipBtn {
+    position: absolute;
+    right: 20px;
+    bottom: 20px;
+    width: auto;
+    height: auto;
+    padding: 8px 16px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 500;
+    background: rgba(20,24,60,.55);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,.2);
+    backdrop-filter: blur(6px);
+    transition: opacity .3s;
+  }
+  #intro.zooming #skipBtn { opacity: 0; }
+
+  .steam path {
+    animation: steam 3s ease-in-out infinite;
+    opacity: 0;
+  }
+  .steam path:nth-child(2) { animation-delay: 1s; }
+  .steam path:nth-child(3) { animation-delay: 2s; }
+  @keyframes steam {
+    0%   { opacity: 0; transform: translateY(6px); }
+    40%  { opacity: .7; }
+    100% { opacity: 0; transform: translateY(-16px); }
+  }
+  .typing { animation: typing .35s ease-in-out infinite alternate; }
+  .typing.r { animation-delay: .17s; }
+  @keyframes typing { to { transform: translateY(2px); } }
+  .head-nod {
+    transform-box: view-box;
+    transform-origin: 595px 505px;
+    animation: nod 5s ease-in-out infinite;
+  }
+  @keyframes nod {
+    0%, 70%, 100% { transform: rotate(0); }
+    80% { transform: rotate(-4deg); }
+    90% { transform: rotate(2deg); }
+  }
+  .sec-hand {
+    transform-box: view-box;
+    transform-origin: 1330px 170px;
+    animation: tick 60s steps(60) infinite;
+  }
+  @keyframes tick { to { transform: rotate(360deg); } }
+  .blink { animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .bar-grow {
+    transform-box: fill-box;
+    transform-origin: bottom;
+    animation: grow 4s ease-in-out infinite;
+  }
+  @keyframes grow { 0%,100% { transform: scaleY(.85); } 50% { transform: scaleY(1); } }
+  .lamp-glow { animation: flick 4s ease-in-out infinite; }
+  @keyframes flick { 50% { opacity: .85; } }
+
+  /* ===== 달 ===== */
+  .moon-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+  #moon {
+    width: 120px;
+    height: 120px;
+    overflow: visible;
+    animation: float 6s ease-in-out infinite;
+  }
+  @keyframes float { 50% { transform: translateY(-4px); } }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px 5px 10px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.06);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    letter-spacing: .2px;
+  }
+  .chip::before {
+    content: "";
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #f5e7bf;
+    box-shadow: 0 0 8px #f5e7bf;
+  }
+
+  /* ===== 시간 ===== */
+  .time {
+    margin-top: 22px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    font-size: clamp(52px, 15vw, 68px);
+    font-weight: 200;
+    letter-spacing: -2px;
+    line-height: 1;
+  }
+  .time .ms {
+    color: var(--muted);
+    font-size: .42em;
+    font-weight: 300;
+    letter-spacing: 0;
+    margin-left: 2px;
+  }
+
+  /* ===== 버튼 ===== */
+  .buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 30px 0 8px;
+  }
+  .buttons button {
+    height: 54px;
+    border-radius: 16px;
+    border: none;
+    font-family: inherit;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: .3px;
+    cursor: pointer;
+    transition: transform .1s ease, background .25s ease, color .25s ease, opacity .25s ease, box-shadow .25s ease;
+  }
+  .buttons button:active { transform: scale(.97); }
+  .buttons button:disabled { opacity: .35; cursor: default; }
+  .buttons button:focus-visible { outline: 2px solid rgba(255,255,255,.5); outline-offset: 2px; }
+  #lapBtn {
+    background: rgba(255,255,255,.07);
+    color: var(--text);
+  }
+  #lapBtn:not(:disabled):hover { background: rgba(255,255,255,.11); }
+  #startBtn {
+    background: #f5e7bf;
+    color: #1a1f46;
+    box-shadow: 0 8px 24px rgba(245,231,191,.18);
+  }
+  #startBtn:hover { background: #fbefcc; }
+  #startBtn.running {
+    background: rgba(255,255,255,.07);
+    color: #ffb4a8;
+    box-shadow: none;
+  }
+
+  /* ===== 랩 목록 ===== */
+  .laps { margin-top: 14px; }
+  .laps:empty { display: none; }
+  .lap-head, .lap-row {
+    display: grid;
+    grid-template-columns: 56px 1fr 1fr;
+    align-items: center;
+    padding: 0 6px;
+  }
+  .lap-head {
+    font-size: 11px;
+    font-weight: 500;
+    color: rgba(154,164,196,.7);
+    padding-bottom: 8px;
+    letter-spacing: .4px;
+  }
+  .lap-head span:not(:first-child), .lap-row span:not(:first-child) { text-align: right; }
+  .lap-list {
+    list-style: none;
+    max-height: 200px;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+  .lap-list::-webkit-scrollbar { display: none; }
+  .lap-row {
+    height: 44px;
+    border-top: 1px solid var(--line);
+    font-variant-numeric: tabular-nums;
+    font-size: 15px;
+    animation: rowIn .3s ease;
+  }
+  @keyframes rowIn { from { opacity: 0; transform: translateY(-4px); } }
+  .lap-row .n { color: var(--muted); font-size: 13px; }
+  .lap-row .total { color: var(--muted); }
+  .lap-row.current .split { color: var(--text); }
+  .lap-row.best .split { color: var(--accent); }
+  .lap-row.worst .split { color: #ffb4a8; }
+
+  .hint {
+    margin-top: 18px;
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+    color: rgba(154,164,196,.7);
+    font-size: 11px;
+  }
+  kbd {
+    display: inline-block;
+    min-width: 18px;
+    margin-right: 4px;
+    padding: 1px 5px;
+    border-radius: 5px;
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.08);
+    font-family: inherit;
+    font-size: 10px;
+    text-align: center;
+    color: var(--muted);
+  }
+</style>
+</head>
+<body>
+  <canvas id="sky"></canvas>
+
+  <!-- ===================== 인트로 장면 ===================== -->
+  <div id="intro">
+    <svg id="scene" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-label="밤에 일하는 컨설턴트의 하얀 오피스">
+      <defs>
+        <linearGradient id="wallGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fdfcf9"/>
+          <stop offset="100%" stop-color="#f1ece4"/>
+        </linearGradient>
+        <linearGradient id="floorGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#ebe4d8"/>
+          <stop offset="100%" stop-color="#ddd4c6"/>
+        </linearGradient>
+        <linearGradient id="coneGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#ffe7a8" stop-opacity=".55"/>
+          <stop offset="100%" stop-color="#ffe7a8" stop-opacity="0"/>
+        </linearGradient>
+        <radialGradient id="warmSpot" r=".5">
+          <stop offset="0%" stop-color="#000"/>
+          <stop offset="55%" stop-color="#000" stop-opacity=".6"/>
+          <stop offset="100%" stop-color="#000" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="screenGlow" r=".5">
+          <stop offset="0%" stop-color="#cfe0ff" stop-opacity=".55"/>
+          <stop offset="100%" stop-color="#cfe0ff" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="lampGlow" r=".5">
+          <stop offset="0%" stop-color="#fff1c4" stop-opacity=".9"/>
+          <stop offset="40%" stop-color="#ffdf94" stop-opacity=".35"/>
+          <stop offset="100%" stop-color="#ffdf94" stop-opacity="0"/>
+        </radialGradient>
+
+        <!-- 창유리 4칸만 뚫어서 뒤의 진짜 밤하늘이 보이게 -->
+        <mask id="paneHole" maskUnits="userSpaceOnUse" x="0" y="0" width="1600" height="900">
+          <rect width="1600" height="900" fill="#fff"/>
+          <rect x="490" y="100" width="303" height="223" fill="#000"/>
+          <rect x="807" y="100" width="303" height="223" fill="#000"/>
+          <rect x="490" y="337" width="303" height="213" fill="#000"/>
+          <rect x="807" y="337" width="303" height="213" fill="#000"/>
+        </mask>
+        <!-- 밤 분위기 어둠: 창문과 스탠드/모니터 주변은 밝게 -->
+        <mask id="nightMask" maskUnits="userSpaceOnUse" x="0" y="0" width="1600" height="900">
+          <rect width="1600" height="900" fill="#fff"/>
+          <rect x="490" y="100" width="303" height="223" fill="#000"/>
+          <rect x="807" y="100" width="303" height="223" fill="#000"/>
+          <rect x="490" y="337" width="303" height="213" fill="#000"/>
+          <rect x="807" y="337" width="303" height="213" fill="#000"/>
+          <circle cx="1080" cy="590" r="330" fill="url(#warmSpot)"/>
+          <circle cx="700"  cy="520" r="300" fill="url(#warmSpot)"/>
+        </mask>
+        <clipPath id="windowClip"><rect x="480" y="90" width="640" height="470"/></clipPath>
+      </defs>
+
+      <!-- 창밖 도시 (JS로 생성) -->
+      <g id="city" clip-path="url(#windowClip)"></g>
+
+      <!-- 벽 + 창틀 (유리 부분은 뚫림) -->
+      <g mask="url(#paneHole)">
+        <rect width="1600" height="770" fill="url(#wallGrad)"/>
+
+        <!-- 화이트보드 -->
+        <g>
+          <rect x="110" y="170" width="290" height="205" rx="8" fill="#fff" stroke="#ddd6ca" stroke-width="6"/>
+          <line x1="140" y1="345" x2="370" y2="345" stroke="#c9c2b6" stroke-width="2"/>
+          <line x1="140" y1="200" x2="140" y2="345" stroke="#c9c2b6" stroke-width="2"/>
+          <rect x="160" y="290" width="26" height="55" rx="3" fill="#9bb5ff"/>
+          <rect x="200" y="260" width="26" height="85" rx="3" fill="#9bb5ff"/>
+          <rect x="240" y="275" width="26" height="70" rx="3" fill="#9bb5ff"/>
+          <rect x="280" y="232" width="26" height="113" rx="3" fill="#8ee6b0"/>
+          <polyline points="173,280 213,250 253,262 293,218 330,205" fill="none" stroke="#ff9e7a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          <text x="150" y="196" font-size="15" fill="#8a8478" font-family="sans-serif" font-weight="600">Q4 GROWTH</text>
+          <rect x="325" y="250" width="44" height="44" fill="#ffe68a" transform="rotate(6 347 272)"/>
+          <rect x="318" y="300" width="44" height="40" fill="#ffc6d8" transform="rotate(-5 340 320)"/>
+          <rect x="190" y="378" width="140" height="8" rx="3" fill="#e4ded3"/>
+          <rect x="210" y="372" width="28" height="7" rx="3" fill="#7aa2ff"/>
+          <rect x="245" y="372" width="28" height="7" rx="3" fill="#ff9e7a"/>
+        </g>
+
+        <!-- 벽시계 (23:40) -->
+        <g>
+          <circle cx="1330" cy="170" r="48" fill="#fff" stroke="#e0d9cd" stroke-width="7"/>
+          <g stroke="#bdb5a8" stroke-width="3" stroke-linecap="round">
+            <line x1="1330" y1="130" x2="1330" y2="138"/>
+            <line x1="1370" y1="170" x2="1362" y2="170"/>
+            <line x1="1330" y1="210" x2="1330" y2="202"/>
+            <line x1="1290" y1="170" x2="1298" y2="170"/>
+          </g>
+          <line x1="1330" y1="170" x2="1330" y2="145" stroke="#3b3f55" stroke-width="5" stroke-linecap="round" transform="rotate(350 1330 170)"/>
+          <line x1="1330" y1="170" x2="1330" y2="134" stroke="#3b3f55" stroke-width="3.5" stroke-linecap="round" transform="rotate(240 1330 170)"/>
+          <line class="sec-hand" x1="1330" y1="178" x2="1330" y2="132" stroke="#ff8a7a" stroke-width="1.6" stroke-linecap="round"/>
+          <circle cx="1330" cy="170" r="4" fill="#3b3f55"/>
+        </g>
+
+        <!-- 책장 -->
+        <g>
+          <rect x="1270" y="290" width="215" height="465" rx="6" fill="#fff" stroke="#e0d9cd" stroke-width="4"/>
+          <g fill="#f3efe8">
+            <rect x="1280" y="395" width="195" height="8"/>
+            <rect x="1280" y="500" width="195" height="8"/>
+            <rect x="1280" y="605" width="195" height="8"/>
+          </g>
+          <!-- 바인더/책 -->
+          <g>
+            <rect x="1290" y="330" width="22" height="65" rx="2" fill="#9bb5ff"/>
+            <rect x="1314" y="325" width="22" height="70" rx="2" fill="#c3d2ff"/>
+            <rect x="1338" y="335" width="20" height="60" rx="2" fill="#2b3566"/>
+            <rect x="1362" y="340" width="18" height="55" rx="2" fill="#e9e4da" transform="rotate(-12 1371 395)"/>
+            <circle cx="1440" cy="378" r="14" fill="#8ee6b0"/>
+            <rect x="1428" y="378" width="24" height="17" rx="3" fill="#fff" stroke="#e0d9cd" stroke-width="2"/>
+
+            <rect x="1290" y="430" width="30" height="70" rx="2" fill="#2b3566"/>
+            <rect x="1322" y="430" width="30" height="70" rx="2" fill="#2b3566"/>
+            <rect x="1354" y="430" width="30" height="70" rx="2" fill="#2b3566"/>
+            <rect x="1296" y="448" width="18" height="8" rx="1" fill="#fff"/>
+            <rect x="1328" y="448" width="18" height="8" rx="1" fill="#fff"/>
+            <rect x="1360" y="448" width="18" height="8" rx="1" fill="#fff"/>
+            <rect x="1400" y="470" width="65" height="12" rx="2" fill="#ffc6d8"/>
+            <rect x="1404" y="482" width="60" height="9" rx="2" fill="#ffe68a"/>
+            <rect x="1398" y="491" width="68" height="9" rx="2" fill="#c3d2ff"/>
+
+            <rect x="1290" y="545" width="20" height="60" rx="2" fill="#ffe68a"/>
+            <rect x="1312" y="540" width="20" height="65" rx="2" fill="#ff9e7a"/>
+            <rect x="1334" y="548" width="20" height="57" rx="2" fill="#9bb5ff"/>
+            <rect x="1356" y="538" width="20" height="67" rx="2" fill="#e9e4da"/>
+            <rect x="1410" y="560" width="50" height="45" rx="4" fill="#f3efe8" stroke="#e0d9cd" stroke-width="2"/>
+            <rect x="1290" y="650" width="180" height="95" rx="4" fill="#f7f4ee"/>
+            <line x1="1380" y1="650" x2="1380" y2="745" stroke="#e6e0d6" stroke-width="3"/>
+            <circle cx="1368" cy="698" r="4" fill="#cfc7ba"/>
+            <circle cx="1392" cy="698" r="4" fill="#cfc7ba"/>
+          </g>
+          <!-- 책장 위 화분 -->
+          <path d="M1420 290 l6 -28 h28 l6 28 z" fill="#fff" stroke="#e0d9cd" stroke-width="2"/>
+          <path d="M1440 262 C1420 230 1418 215 1430 205 C1440 225 1442 240 1440 262 Z" fill="#7fcf9a"/>
+          <path d="M1442 262 C1460 235 1470 228 1478 222 C1472 245 1458 255 1442 262 Z" fill="#9ade7a"/>
+          <path d="M1438 262 C1415 248 1404 246 1396 246 C1406 258 1420 262 1438 262 Z" fill="#6cc08a"/>
+        </g>
+
+        <!-- 커튼 봉 -->
+        <rect x="400" y="62" width="800" height="7" rx="3.5" fill="#d9d2c6"/>
+        <!-- 창틀 -->
+        <rect x="472" y="82" width="656" height="486" rx="6" fill="#ffffff" stroke="#e3ddd2" stroke-width="3"/>
+        <rect x="793" y="92" width="14" height="466" fill="#f7f4ee"/>
+        <rect x="482" y="323" width="636" height="14" fill="#f7f4ee"/>
+        <!-- 창턱 -->
+        <rect x="452" y="560" width="696" height="18" rx="5" fill="#fff" stroke="#e3ddd2" stroke-width="3"/>
+        <!-- 걸레받이 -->
+        <rect x="0" y="752" width="1600" height="18" fill="#e7e0d5"/>
+      </g>
+
+      <!-- 커튼 -->
+      <path d="M408 66 C430 200 405 360 430 520 C440 580 470 600 498 604 C478 470 500 300 486 66 Z" fill="#fff" opacity=".95"/>
+      <path d="M432 80 C445 250 430 400 456 590" stroke="#ece6dc" stroke-width="3" fill="none"/>
+      <path d="M1192 66 C1170 200 1195 360 1170 520 C1160 580 1130 600 1102 604 C1122 470 1100 300 1114 66 Z" fill="#fff" opacity=".95"/>
+      <path d="M1168 80 C1155 250 1170 400 1144 590" stroke="#ece6dc" stroke-width="3" fill="none"/>
+
+      <!-- 창턱 위 작은 화분들 -->
+      <g>
+        <path d="M505 560 l4 -24 h30 l4 24 z" fill="#ffc6d8"/>
+        <rect x="514" y="490" width="16" height="48" rx="8" fill="#7fcf9a"/>
+        <rect x="502" y="505" width="12" height="22" rx="6" fill="#7fcf9a"/>
+        <rect x="530" y="500" width="11" height="20" rx="5.5" fill="#7fcf9a"/>
+      </g>
+
+      <!-- 바닥 + 러그 -->
+      <rect y="770" width="1600" height="130" fill="url(#floorGrad)"/>
+      <ellipse cx="660" cy="850" rx="420" ry="46" fill="#e6dcef"/>
+      <!-- 바닥 화분 -->
+      <g>
+        <path d="M120 870 l-14 -90 h96 l-14 90 z" fill="#fff" stroke="#e0d9cd" stroke-width="3"/>
+        <path d="M154 782 C120 700 90 650 70 620 C110 640 150 700 154 782 Z" fill="#6cc08a"/>
+        <path d="M154 782 C160 680 180 620 200 580 C205 640 180 720 154 782 Z" fill="#7fcf9a"/>
+        <path d="M154 782 C200 720 240 700 270 690 C250 730 210 760 154 782 Z" fill="#9ade7a"/>
+        <path d="M154 782 C140 700 130 640 140 600 C160 650 162 720 154 782 Z" fill="#5cb07a"/>
+      </g>
+
+      <!-- 책상 -->
+      <g>
+        <rect x="395" y="640" width="16" height="140" rx="4" fill="#ebe5da"/>
+        <rect x="1048" y="618" width="160" height="160" rx="6" fill="#f8f5f0" stroke="#e3ddd2" stroke-width="3"/>
+        <line x1="1052" y1="672" x2="1204" y2="672" stroke="#e3ddd2" stroke-width="3"/>
+        <line x1="1052" y1="726" x2="1204" y2="726" stroke="#e3ddd2" stroke-width="3"/>
+        <rect x="1110" y="640" width="36" height="6" rx="3" fill="#d4ccbf"/>
+        <rect x="1110" y="694" width="36" height="6" rx="3" fill="#d4ccbf"/>
+        <rect x="1110" y="748" width="36" height="6" rx="3" fill="#d4ccbf"/>
+        <rect x="370" y="600" width="860" height="20" rx="5" fill="#fff" stroke="#e3ddd2" stroke-width="3"/>
+        <rect x="388" y="620" width="660" height="20" fill="#f4f0e9"/>
+      </g>
+
+      <!-- 모니터 빛 -->
+      <ellipse cx="720" cy="500" rx="220" ry="160" fill="url(#screenGlow)"/>
+
+      <!-- 모니터 (슬라이드) -->
+      <g>
+        <rect x="705" y="568" width="30" height="32" fill="#d9d2c6"/>
+        <ellipse cx="720" cy="600" rx="48" ry="6" fill="#d9d2c6"/>
+        <rect x="598" y="418" width="244" height="154" rx="10" fill="#22283f"/>
+        <rect x="608" y="428" width="224" height="134" rx="4" fill="#f6f8ff"/>
+        <rect x="620" y="440" width="90" height="9" rx="3" fill="#2b3566"/>
+        <rect x="620" y="454" width="140" height="5" rx="2.5" fill="#c3cbe6"/>
+        <g>
+          <rect class="bar-grow" x="630" y="510" width="22" height="40" rx="2" fill="#9bb5ff"/>
+          <rect class="bar-grow" x="660" y="492" width="22" height="58" rx="2" fill="#9bb5ff" style="animation-delay:.4s"/>
+          <rect class="bar-grow" x="690" y="500" width="22" height="50" rx="2" fill="#9bb5ff" style="animation-delay:.8s"/>
+          <rect class="bar-grow" x="720" y="475" width="22" height="75" rx="2" fill="#8ee6b0" style="animation-delay:1.2s"/>
+        </g>
+        <rect x="760" y="478" width="58" height="6" rx="3" fill="#c3cbe6"/>
+        <rect x="760" y="492" width="48" height="6" rx="3" fill="#c3cbe6"/>
+        <rect x="760" y="506" width="54" height="6" rx="3" fill="#c3cbe6"/>
+        <circle cx="788" cy="533" r="13" fill="none" stroke="#ff9e7a" stroke-width="6" stroke-dasharray="55 30"/>
+      </g>
+
+      <!-- 노트북 (스프레드시트) -->
+      <g>
+        <rect x="878" y="502" width="134" height="88" rx="6" fill="#22283f"/>
+        <rect x="886" y="510" width="118" height="72" rx="2" fill="#f6fbf8"/>
+        <g stroke="#d5e6dc" stroke-width="1.5">
+          <line x1="886" y1="524" x2="1004" y2="524"/>
+          <line x1="886" y1="538" x2="1004" y2="538"/>
+          <line x1="886" y1="552" x2="1004" y2="552"/>
+          <line x1="886" y1="566" x2="1004" y2="566"/>
+          <line x1="918" y1="510" x2="918" y2="582"/>
+          <line x1="952" y1="510" x2="952" y2="582"/>
+        </g>
+        <rect x="886" y="510" width="118" height="14" fill="#8ee6b0" opacity=".6"/>
+        <rect class="blink" x="958" y="541" width="2" height="10" fill="#2b3566"/>
+        <path d="M866 590 h158 l8 10 h-174 z" fill="#d9d2c6"/>
+      </g>
+
+      <!-- 서류, 포스트잇, 키보드 -->
+      <g>
+        <rect x="430" y="588" width="110" height="12" rx="2" fill="#fff" stroke="#e3ddd2" stroke-width="2" transform="rotate(-3 485 594)"/>
+        <rect x="436" y="580" width="104" height="10" rx="2" fill="#fbf8f2" stroke="#e3ddd2" stroke-width="2" transform="rotate(2 488 585)"/>
+        <rect x="462" y="566" width="22" height="22" fill="#ffe68a" transform="rotate(-8 473 577)"/>
+        <rect x="640" y="590" width="160" height="10" rx="3" fill="#ebe5da"/>
+      </g>
+
+      <!-- 커피 머그 + 김 -->
+      <g>
+        <g class="steam" stroke="#ffffff" stroke-width="3" fill="none" stroke-linecap="round">
+          <path d="M1040 560 c-6 -10 6 -16 0 -26"/>
+          <path d="M1050 560 c-6 -10 6 -16 0 -26"/>
+          <path d="M1060 560 c-6 -10 6 -16 0 -26"/>
+        </g>
+        <rect x="1034" y="566" width="32" height="34" rx="6" fill="#fff" stroke="#e0d9cd" stroke-width="2.5"/>
+        <path d="M1066 574 c14 0 14 18 0 18" fill="none" stroke="#e0d9cd" stroke-width="4"/>
+        <rect x="1040" y="578" width="20" height="5" rx="2" fill="#9bb5ff"/>
+      </g>
+
+      <!-- 사람 (뒷모습) -->
+      <g>
+        <!-- 팔 -->
+        <path class="typing" d="M546 522 Q512 560 522 604 L548 606 Q546 572 562 540 Z" fill="#26305c"/>
+        <path class="typing r" d="M644 522 Q678 560 668 604 L642 606 Q644 572 628 540 Z" fill="#26305c"/>
+        <!-- 몸통(남색 재킷) -->
+        <path d="M538 524 Q595 500 652 524 L664 615 L526 615 Z" fill="#2b3566"/>
+        <path d="M595 512 L595 612" stroke="#232c58" stroke-width="2"/>
+        <g class="head-nod">
+          <!-- 목, 셔츠 깃 -->
+          <rect x="583" y="486" width="24" height="24" rx="6" fill="#f1cdb2"/>
+          <rect x="576" y="504" width="38" height="10" rx="4" fill="#fff"/>
+          <!-- 귀 -->
+          <circle cx="557" cy="472" r="7" fill="#f1cdb2"/>
+          <circle cx="633" cy="472" r="7" fill="#f1cdb2"/>
+          <!-- 머리카락 + 똥머리 -->
+          <circle cx="595" cy="465" r="39" fill="#3b2b28"/>
+          <circle cx="595" cy="420" r="18" fill="#3b2b28"/>
+          <rect x="584" y="432" width="22" height="6" rx="3" fill="#ffc6d8"/>
+          <path d="M572 440 Q590 430 606 438" stroke="#5c4640" stroke-width="3" fill="none" stroke-linecap="round"/>
+          <path d="M588 412 Q596 406 604 412" stroke="#5c4640" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+        </g>
+      </g>
+
+      <!-- 의자 -->
+      <g>
+        <rect x="524" y="588" width="142" height="120" rx="30" fill="#fff" stroke="#e1dbd0" stroke-width="3"/>
+        <rect x="548" y="604" width="94" height="6" rx="3" fill="#f0ebe3"/>
+        <rect x="588" y="706" width="14" height="48" fill="#d9d2c6"/>
+        <path d="M535 770 L595 752 L655 770" stroke="#d9d2c6" stroke-width="8" fill="none" stroke-linecap="round"/>
+        <circle cx="535" cy="776" r="7" fill="#bfb7aa"/>
+        <circle cx="655" cy="776" r="7" fill="#bfb7aa"/>
+        <circle cx="595" cy="772" r="7" fill="#bfb7aa"/>
+      </g>
+
+      <!-- 스탠드 (조명 줄기 등) -->
+      <g>
+        <ellipse cx="1170" cy="598" rx="28" ry="6" fill="#2b3566"/>
+        <path d="M1170 596 L1150 512 L1100 478" stroke="#2b3566" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="1150" cy="512" r="6" fill="#2b3566"/>
+        <path d="M1078 466 L1122 470 L1112 500 L1072 494 Z" fill="#2b3566"/>
+      </g>
+
+      <!-- 밤의 어둠 -->
+      <rect width="1600" height="900" fill="#1a2058" opacity=".24" mask="url(#nightMask)"/>
+
+      <!-- 스탠드 불빛 (어둠 위에) -->
+      <g class="lamp-glow">
+        <polygon points="1078,494 1112,500 1160,600 980,600" fill="url(#coneGrad)"/>
+        <circle cx="1094" cy="498" r="70" fill="url(#lampGlow)"/>
+        <ellipse cx="1070" cy="600" rx="120" ry="10" fill="#ffe7a8" opacity=".35"/>
+      </g>
+
+      <!-- 확대 목표: 오른쪽 위 유리창 -->
+      <rect id="zoomPane" x="807" y="100" width="303" height="223" fill="none"/>
+    </svg>
+    <button id="skipBtn" type="button">건너뛰기 ›</button>
+  </div>
+
+  <div class="wrap">
+    <div class="moon-box">
+      <svg id="moon" viewBox="-60 -60 120 120" aria-hidden="true">
+        <defs>
+          <radialGradient id="halo" r=".5">
+            <stop offset="35%" stop-color="#f5e7bf" stop-opacity=".22"/>
+            <stop offset="100%" stop-color="#f5e7bf" stop-opacity="0"/>
+          </radialGradient>
+          <clipPath id="litClip"><path id="litClipPath" d=""/></clipPath>
+        </defs>
+        <circle id="glowCircle" r="60" fill="url(#halo)"/>
+        <!-- 어두운 면 -->
+        <circle r="36" fill="#ffffff" fill-opacity=".05" stroke="#ffffff" stroke-opacity=".12" stroke-width="1"/>
+        <!-- 밝은 면 -->
+        <path id="litPath" d="" fill="#f5e7bf"/>
+        <!-- 크레이터 (밝은 면에만) -->
+        <g clip-path="url(#litClip)" fill="#e6d4a3">
+          <circle cx="-11" cy="-12" r="6"/>
+          <circle cx="12" cy="-4" r="3.6"/>
+          <circle cx="-3" cy="14" r="7.5"/>
+          <circle cx="17" cy="15" r="3"/>
+          <circle cx="-22" cy="6" r="2.6"/>
+          <circle cx="5" cy="-24" r="2.2"/>
+        </g>
+      </svg>
+      <div class="chip" id="phaseName">초승달</div>
+    </div>
+
+    <div class="time" id="display">00:00<span class="ms">.00</span></div>
+
+    <div class="buttons">
+      <button id="lapBtn" disabled>랩</button>
+      <button id="startBtn">시작</button>
+    </div>
+
+    <div class="laps" id="laps"></div>
+
+    <div class="hint"><span><kbd>Space</kbd>시작·정지</span><span><kbd>L</kbd>랩</span><span><kbd>R</kbd>리셋</span></div>
+  </div>
+
+<script>
+  /* ===================== 설정 ===================== */
+  const MOON_CYCLE_MS = 60 * 1000;  // 달이 한 바퀴(초승달→보름달→초승달) 도는 시간: 60초
+  const START_PHASE  = 0.11;        // 시작 위상 (0=그믐/삭, 0.5=보름). 0.11 ≈ 초승달
+
+  /* ===================== 밤하늘 별 ===================== */
+  const sky = document.getElementById('sky');
+  const ctx = sky.getContext('2d');
+  let stars = [];
+  let shooting = null;
+
+  function resizeSky() {
+    const dpr = window.devicePixelRatio || 1;
+    sky.width = innerWidth * dpr;
+    sky.height = innerHeight * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const count = Math.floor((innerWidth * innerHeight) / 2600);
+    stars = Array.from({ length: count }, () => ({
+      x: Math.random() * innerWidth,
+      y: Math.random() * innerHeight,
+      r: Math.random() < 0.9 ? Math.random() * 1.1 + 0.2 : Math.random() * 1.6 + 1,
+      base: Math.random() * 0.6 + 0.3,
+      speed: Math.random() * 0.002 + 0.0006,
+      offset: Math.random() * Math.PI * 2,
+      hue: Math.random() < 0.15 ? 'rgba(200,215,255,' : Math.random() < 0.1 ? 'rgba(255,235,200,' : 'rgba(255,255,255,'
+    }));
+  }
+
+  function drawSky(t) {
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    for (const s of stars) {
+      const a = s.base + Math.sin(t * s.speed + s.offset) * 0.3;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = s.hue + Math.max(0.05, a) + ')';
+      ctx.fill();
+    }
+
+    // 가끔 별똥별
+    if (!shooting && Math.random() < 0.002) {
+      shooting = {
+        x: Math.random() * innerWidth * 0.7 + innerWidth * 0.2,
+        y: Math.random() * innerHeight * 0.35,
+        vx: -(Math.random() * 6 + 7),
+        vy: Math.random() * 3 + 3,
+        life: 0
+      };
+    }
+    if (shooting) {
+      const s = shooting;
+      const len = 14;
+      const grad = ctx.createLinearGradient(s.x, s.y, s.x - s.vx * len, s.y - s.vy * len);
+      const alpha = 1 - s.life / 60;
+      grad.addColorStop(0, `rgba(255,255,255,${alpha})`);
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y);
+      ctx.lineTo(s.x - s.vx * len, s.y - s.vy * len);
+      ctx.stroke();
+      s.x += s.vx; s.y += s.vy; s.life++;
+      if (s.life > 60) shooting = null;
+    }
+    requestAnimationFrame(drawSky);
+  }
+
+  addEventListener('resize', resizeSky);
+  resizeSky();
+  requestAnimationFrame(drawSky);
+
+  /* ===================== 달 위상 ===================== */
+  const R = 36;
+  const litClipPath = document.getElementById('litClipPath');
+  const litPath = document.getElementById('litPath');
+  const glowCircle = document.getElementById('glowCircle');
+  const phaseName = document.getElementById('phaseName');
+
+  // phase: 0~1 (0=삭, 0.25=상현, 0.5=보름, 0.75=하현)
+  function moonPath(phase) {
+    const k = Math.cos(2 * Math.PI * phase);   // 1 → -1 → 1
+    const rx = Math.abs(k) * R;
+    const waxing = phase < 0.5;
+    const outerSweep = waxing ? 1 : 0;           // 차는 달은 오른쪽, 기우는 달은 왼쪽이 밝음
+    const termSweep = waxing ? (k > 0 ? 0 : 1) : (k > 0 ? 1 : 0);
+    return `M 0 ${-R} A ${R} ${R} 0 0 ${outerSweep} 0 ${R} A ${rx} ${R} 0 0 ${termSweep} 0 ${-R} Z`;
+  }
+
+  function phaseLabel(p) {
+    if (p < 0.03 || p >= 0.97) return '그믐 · 삭';
+    if (p < 0.22) return '초승달';
+    if (p < 0.28) return '상현달';
+    if (p < 0.47) return '차오르는 달';
+    if (p < 0.53) return '보름달';
+    if (p < 0.72) return '기우는 달';
+    if (p < 0.78) return '하현달';
+    return '그믐달';
+  }
+
+  function updateMoon(ms) {
+    const phase = (START_PHASE + ms / MOON_CYCLE_MS) % 1;
+    const d = moonPath(phase);
+    litClipPath.setAttribute('d', d);
+    litPath.setAttribute('d', d);
+    const illum = (1 - Math.cos(2 * Math.PI * phase)) / 2;   // 0~1 밝기
+    glowCircle.setAttribute('opacity', (0.1 + illum * 0.9).toFixed(3));
+    phaseName.textContent = phaseLabel(phase);
+  }
+
+  /* ===================== 스탑워치 ===================== */
+  const display = document.getElementById('display');
+  const startBtn = document.getElementById('startBtn');
+  const lapBtn = document.getElementById('lapBtn');
+  const lapList = document.getElementById('laps');
+
+  let running = false;
+  let startTime = 0;
+  let elapsed = 0;
+  let laps = [];
+  let lastLapTotal = 0;
+  let rafId = null;
+
+  function now() { return elapsed + (running ? performance.now() - startTime : 0); }
+
+  function format(ms) {
+    const cs = Math.floor(ms / 10) % 100;
+    const s = Math.floor(ms / 1000) % 60;
+    const m = Math.floor(ms / 60000) % 60;
+    const h = Math.floor(ms / 3600000);
+    const pad = n => String(n).padStart(2, '0');
+    const main = (h > 0 ? h + ':' + pad(m) : pad(m)) + ':' + pad(s);
+    return { main, cs: '.' + pad(cs) };
+  }
+
+  function render() {
+    const ms = now();
+    const t = format(ms);
+    display.innerHTML = `${t.main}<span class="ms">${t.cs}</span>`;
+    updateMoon(ms);
+    const cur = lapList.querySelector('.current');
+    if (cur) {
+      const f = format(ms - lastLapTotal), g = format(ms);
+      cur.querySelector('.split').textContent = f.main + f.cs;
+      cur.querySelector('.total').textContent = g.main + g.cs;
+    }
+    if (running) rafId = requestAnimationFrame(render);
+  }
+
+  function row(cls, n, split, total) {
+    const a = format(split), b = format(total);
+    return `<li class="lap-row ${cls}"><span class="n">${String(n).padStart(2, '0')}</span>` +
+           `<span class="split">${a.main}${a.cs}</span><span class="total">${b.main}${b.cs}</span></li>`;
+  }
+
+  // 랩을 한 번 이상 기록했을 때만 목록 표시
+  function renderLaps() {
+    if (laps.length === 0) { lapList.innerHTML = ''; return; }
+    const min = laps.length >= 2 ? Math.min(...laps) : null;
+    const max = laps.length >= 2 ? Math.max(...laps) : null;
+    const t = now();
+    let html = row('current', laps.length + 1, t - lastLapTotal, t);
+    let total = lastLapTotal;
+    for (let i = laps.length - 1; i >= 0; i--) {
+      const cls = laps[i] === min ? 'best' : laps[i] === max ? 'worst' : '';
+      html += row(cls, i + 1, laps[i], total);
+      total -= laps[i];
+    }
+    lapList.innerHTML =
+      '<div class="lap-head"><span>랩</span><span>구간</span><span>누적</span></div>' +
+      `<ul class="lap-list">${html}</ul>`;
+  }
+
+  function toggle() {
+    if (running) {
+      elapsed = now();
+      running = false;
+      cancelAnimationFrame(rafId);
+      startBtn.textContent = '시작';
+      startBtn.classList.remove('running');
+      lapBtn.textContent = '리셋';
+      render();
+    } else {
+      startTime = performance.now();
+      running = true;
+      startBtn.textContent = '정지';
+      startBtn.classList.add('running');
+      lapBtn.textContent = '랩';
+      lapBtn.disabled = false;
+      renderLaps();
+      render();
+    }
+  }
+
+  function lap() {
+    if (!running) return;
+    const total = now();
+    laps.push(total - lastLapTotal);
+    lastLapTotal = total;
+    renderLaps();
+  }
+
+  function reset() {
+    if (running) return;
+    elapsed = 0;
+    laps = [];
+    lastLapTotal = 0;
+    lapBtn.textContent = '랩';
+    lapBtn.disabled = true;
+    lapList.innerHTML = '';
+    render();
+  }
+
+  startBtn.addEventListener('click', toggle);
+  lapBtn.addEventListener('click', () => running ? lap() : reset());
+
+  document.addEventListener('keydown', e => {
+    if (!introDone) { e.preventDefault(); skipIntro(); return; }
+    if (e.code === 'Space') { e.preventDefault(); toggle(); }
+    else if (e.key === 'l' || e.key === 'L') lap();
+    else if (e.key === 'r' || e.key === 'R') reset();
+  });
+
+  render();
+
+  /* ===================== 인트로 ===================== */
+  const intro = document.getElementById('intro');
+  const scene = document.getElementById('scene');
+  const zoomPane = document.getElementById('zoomPane');
+  let introDone = false;
+  let zoomStarted = false;
+  let introTimers = [];
+
+  // 창밖 도시 실루엣 (오른쪽 위 유리창은 하늘만 보이게 비워둠)
+  (function buildCity() {
+    const NS = 'http://www.w3.org/2000/svg';
+    const city = document.getElementById('city');
+    let x = 470;
+    while (x < 1125) {
+      const w = 36 + Math.random() * 44;
+      const minTop = x + w > 800 ? 395 : 360;
+      const top = minTop + Math.random() * 120;
+      const b = document.createElementNS(NS, 'rect');
+      b.setAttribute('x', x); b.setAttribute('y', top);
+      b.setAttribute('width', w); b.setAttribute('height', 560 - top);
+      b.setAttribute('fill', Math.random() < .5 ? '#232a5e' : '#2b3370');
+      city.appendChild(b);
+      for (let wy = top + 10; wy < 548; wy += 14) {
+        for (let wx = x + 7; wx < x + w - 8; wx += 12) {
+          if (Math.random() < .32) {
+            const win = document.createElementNS(NS, 'rect');
+            win.setAttribute('x', wx); win.setAttribute('y', wy);
+            win.setAttribute('width', 5); win.setAttribute('height', 7);
+            win.setAttribute('fill', Math.random() < .8 ? '#ffd98a' : '#cfe0ff');
+            win.setAttribute('opacity', (.5 + Math.random() * .5).toFixed(2));
+            city.appendChild(win);
+          }
+        }
+      }
+      x += w + 4 + Math.random() * 10;
+    }
+  })();
+
+  // 세로 화면에서는 사람과 모니터가 가운데 오도록
+  function fitScene() {
+    if (zoomStarted) return;
+    scene.setAttribute('viewBox', innerWidth / innerHeight < 1 ? '-110 0 1600 900' : '0 0 1600 900');
+  }
+  fitScene();
+  addEventListener('resize', fitScene);
+
+  function zoomIntoWindow() {
+    if (zoomStarted) return;
+    zoomStarted = true;
+    intro.classList.add('zooming');
+    const r = zoomPane.getBoundingClientRect();
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    const s = Math.max(innerWidth / r.width, innerHeight / r.height) * 1.15;
+    scene.style.transformOrigin = `${cx}px ${cy}px`;
+    scene.style.transform = `translate(${innerWidth / 2 - cx}px, ${innerHeight / 2 - cy}px) scale(${s})`;
+    introTimers.push(setTimeout(finishIntro, 2500));
+  }
+
+  function finishIntro() {
+    if (introDone) return;
+    introDone = true;
+    introTimers.forEach(clearTimeout);
+    intro.classList.add('fade');
+    document.body.classList.add('ready');
+    setTimeout(() => intro.remove(), 800);
+  }
+
+  function skipIntro() {
+    if (!zoomStarted) { zoomIntoWindow(); }
+    else finishIntro();
+  }
+
+  document.getElementById('skipBtn').addEventListener('click', e => {
+    e.stopPropagation();
+    finishIntro();
+  });
+  intro.addEventListener('click', () => zoomIntoWindow());
+
+  // 3초간 오피스를 보여준 뒤 창문으로 확대
+  introTimers.push(setTimeout(zoomIntoWindow, 3000));
+</script>
+</body>
+</html>
